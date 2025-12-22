@@ -1,0 +1,48 @@
+# Docker ignore patterns
+.git
+.gitignore
+.env
+.env.local
+.env.*.local
+*.md
+!README.md
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist
+build
+.pytest_cache
+.coverage
+htmlcov
+
+# Node
+node_modules
+npm-debug.log
+.next
+out
+
+# IDE
+.vscode
+.idea
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs
+
+# Development files
+*.db
+*.sqlite
+uploads
+temp

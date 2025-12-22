@@ -1,0 +1,39 @@
+# Development docker-compose (lighter, faster)
+version: '3.8'
+
+services:
+  # Qdrant Vector Database
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: opd_qdrant_dev
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_storage_dev:/qdrant/storage
+    networks:
+      - opd_network_dev
+
+  # PostgreSQL Database (optional for dev, can use SQLite)
+  postgres:
+    image: postgres:15-alpine
+    container_name: opd_postgres_dev
+    environment:
+      POSTGRES_USER: opd_user
+      POSTGRES_PASSWORD: opd_password
+      POSTGRES_DB: opd_claims
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+    networks:
+      - opd_network_dev
+
+volumes:
+  postgres_data_dev:
+  qdrant_storage_dev:
+
+
+networks:
+  opd_network_dev:
+    driver: bridge

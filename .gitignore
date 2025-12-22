@@ -1,0 +1,130 @@
+# ============================================
+# COMPREHENSIVE .GITIGNORE
+# OPD Claims Adjudication System
+# ============================================
+
+# ==================== PYTHON ====================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual Environments
+venv/
+env/
+ENV/
+.venv
+
+# Python Build
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ==================== NODE.JS ====================
+node_modules/
+.pnp
+.pnp.js
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+
+# ==================== NEXT.JS ====================
+.next/
+out/
+.turbo
+*.tsbuildinfo
+next-env.d.ts
+
+# ==================== ENVIRONMENT ====================
+.env
+.env.local
+.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# ==================== DATABASE ====================
+*.db
+*.sqlite
+*.sqlite3
+postgres_data/
+qdrant_data/
+redis_data/
+minio_data/
+
+# ==================== UPLOADS & TEMP ====================
+uploads/
+temp/
+*.tmp
+
+# ==================== VECTOR DB ====================
+chroma_db/
+qdrant_storage/
+
+# ==================== IDE & EDITORS ====================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ==================== LOGS ====================
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ==================== TESTING ====================
+.pytest_cache/
+.coverage
+htmlcov/
+coverage/
+*.cover
+.hypothesis/
+.tox/
+
+# ==================== DOCKER ====================
+# Keep docker-compose files but ignore volumes
+docker-compose.override.yml
+
+# ==================== GIT ====================
+# Ignore nested .git folders (submodules issue)
+frontend/.git/
+backend/.git/
+
+# ==================== OS ====================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ==================== MISC ====================
+*.bak
+*.swp
+*.swo
+.cache/

@@ -1,0 +1,54 @@
+[tool.poetry]
+name = "opd-claims-backend"
+version = "1.0.0"
+description = "AI-powered OPD Claims Adjudication System Backend"
+authors = ["Your Name <your.email@example.com>"]
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "*"
+uvicorn = {extras = ["standard"], version = "*"}
+python-multipart = "*"
+sqlalchemy = "*"
+psycopg2 = "*"  # Production-ready, compiled from source (requires libpq-dev)
+alembic = "*"
+openai = "*"
+langchain = "*"
+langchain-openai = "*"
+tiktoken = "*"
+qdrant-client = "*"
+minio = "*"
+sentence-transformers = "*"
+pytesseract = "*"
+pillow = "*"
+pdf2image = "*"
+pydantic = "*"
+pydantic-settings = "*"
+python-dotenv = "*"
+python-jose = {extras = ["cryptography"], version = "*"}
+passlib = {extras = ["bcrypt"], version = "*"}
+email-validator = "^2.3.0"
+celery = "*"
+redis = "*"
+sse-starlette = "^3.0.4"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "*"
+pytest-asyncio = "*"
+httpx = "*"
+black = "*"
+ruff = "*"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 100
+target-version = ['py310']
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
