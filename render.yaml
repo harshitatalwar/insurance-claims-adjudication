@@ -107,4 +107,3 @@ databases:
   - name: opd-redis
     plan: free
     region: oregon
-    maxmemoryPolicy: noeviction
