@@ -1,0 +1,110 @@
+# Render Blueprint for OPD Claims Adjudication System
+# Deploy all services together with one click!
+
+services:
+  # ==================== BACKEND API ====================
+  - type: web
+    name: opd-backend
+    runtime: python
+    region: oregon
+    plan: free
+    rootDir: backend
+    buildCommand: pip install poetry && poetry install --no-root
+    startCommand: poetry run uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: opd-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: opd-redis
+          property: connectionString
+      - key: OPENAI_API_KEY
+        sync: false  # You'll add this manually
+      - key: SECRET_KEY
+        generateValue: true
+      - key: MINIO_ENDPOINT
+        value: opd-minio.onrender.com
+      - key: MINIO_ACCESS_KEY
+        value: minioadmin
+      - key: MINIO_SECRET_KEY
+        value: minioadmin123
+      - key: ALLOWED_ORIGINS
+        fromService:
+          type: web
+          name: opd-frontend
+          property: host
+
+  # ==================== CELERY WORKER ====================
+  - type: worker
+    name: opd-celery-worker
+    runtime: python
+    region: oregon
+    plan: free
+    rootDir: backend
+    buildCommand: pip install poetry && poetry install --no-root
+    startCommand: poetry run celery -A app.worker worker --loglevel=info --concurrency=2
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: opd-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: opd-redis
+          property: connectionString
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: MINIO_ENDPOINT
+        value: opd-minio.onrender.com
+      - key: MINIO_ACCESS_KEY
+        value: minioadmin
+      - key: MINIO_SECRET_KEY
+        value: minioadmin123
+
+  # ==================== FRONTEND ====================
+  - type: web
+    name: opd-frontend
+    runtime: node
+    region: oregon
+    plan: free
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: opd-backend
+          property: host
+
+  # ==================== MINIO (Object Storage) ====================
+  - type: web
+    name: opd-minio
+    runtime: docker
+    region: oregon
+    plan: free
+    dockerfilePath: ./Dockerfile.minio
+    dockerContext: .
+    envVars:
+      - key: MINIO_ROOT_USER
+        value: minioadmin
+      - key: MINIO_ROOT_PASSWORD
+        value: minioadmin123
+
+# ==================== DATABASES ====================
+databases:
+  - name: opd-postgres
+    databaseName: opd_claims
+    user: opd_user
+    plan: free
+    region: oregon
+
+  - name: opd-redis
+    plan: free
+    region: oregon
+    maxmemoryPolicy: noeviction
