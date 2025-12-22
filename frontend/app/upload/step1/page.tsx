@@ -11,15 +11,12 @@ export default function Step1UploadPage() {
     const { user, policyHolder, token, isLoading } = useAuth()
     const router = useRouter()
 
-    const urlClaimId = typeof window !== 'undefined'
-        ? new URLSearchParams(window.location.search).get('claim_id')
-        : null
     const [claimId, setClaimId] = useState<string | null>(() => {
         if (typeof window !== 'undefined') {
             const cached = localStorage.getItem('current_claim_id')
             if (cached) return cached
         }
-        return urlClaimId
+        return null
     })
 
     const [selectedFiles, setSelectedFiles] = useState<File[]>([])
@@ -30,6 +27,17 @@ export default function Step1UploadPage() {
     const [dragActive, setDragActive] = useState(false)
 
     const claimCreationAttempted = useRef(false)
+
+    // Get claim ID from URL on mount
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const urlClaimId = new URLSearchParams(window.location.search).get('claim_id')
+            if (urlClaimId && urlClaimId !== claimId) {
+                setClaimId(urlClaimId)
+                localStorage.setItem('current_claim_id', urlClaimId)
+            }
+        }
+    }, [])
 
     // Redirect if not authenticated
     useEffect(() => {
@@ -54,9 +62,11 @@ export default function Step1UploadPage() {
     // Auto-redirect to step 2 after upload completes
     useEffect(() => {
         if (uploadComplete && claimId) {
+            console.log('⏰ Upload complete! Redirecting to step 2 in 1 second...')
             const timer = setTimeout(() => {
+                console.log('🔄 Redirecting now to step 2...')
                 router.push(`/upload/step2?claim_id=${claimId}`)
-            }, 10000) // 10 seconds
+            }, 1000) // 1 second
 
             return () => clearTimeout(timer)
         }
@@ -140,10 +150,16 @@ export default function Step1UploadPage() {
         setUploading(true)
         setError('')
 
+        console.log('🚀 Starting upload for', selectedFiles.length, 'file(s)')
+        console.log('📋 Claim ID:', claimId)
+
         try {
             for (let i = 0; i < selectedFiles.length; i++) {
                 const file = selectedFiles[i]
+                console.log(`\n📄 Processing file ${i + 1}/${selectedFiles.length}:`, file.name)
 
+                // Step 1: Get presigned URL
+                console.log('  ⏳ Step 1: Requesting presigned URL...')
                 const presignedResponse = await axios.post(
                     `${API_BASE_URL}/api/documents/upload`,
                     {
@@ -157,24 +173,39 @@ export default function Step1UploadPage() {
                 )
 
                 const { file_id, upload_url } = presignedResponse.data
+                console.log('  ✅ Step 1 Complete: Got presigned URL')
+                console.log('     File ID:', file_id)
 
+                // Step 2: Upload to MinIO
+                console.log('  ⏳ Step 2: Uploading to MinIO...')
                 await axios.put(upload_url, file, {
                     headers: {
                         'Content-Type': file.type || 'application/octet-stream'
                     }
                 })
+                console.log('  ✅ Step 2 Complete: File uploaded to MinIO')
 
-                await axios.post(
+                // Step 3: Trigger OCR processing
+                console.log('  ⏳ Step 3: Triggering OCR pipeline...')
+                const processResponse = await axios.post(
                     `${API_BASE_URL}/api/documents/${file_id}/process`,
                     {},
                     {
                         headers: { Authorization: `Bearer ${token}` }
                     }
                 )
+                console.log('  ✅ Step 3 Complete: OCR pipeline triggered!')
+                console.log('     Response:', processResponse.data)
             }
 
+            console.log('\n✅ All files uploaded and queued for processing!')
             setUploadComplete(true)
             setSelectedFiles([])
+
+            // Persist upload complete state to survive hot reloads
+            if (typeof window !== 'undefined') {
+                localStorage.setItem('upload_complete_' + claimId, 'true')
+            }
         } catch (err: any) {
             setError(err.response?.data?.detail || err.message || 'Upload failed')
         } finally {

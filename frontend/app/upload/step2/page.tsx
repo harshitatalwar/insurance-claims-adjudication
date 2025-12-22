@@ -22,11 +22,23 @@ export default function Step2DocumentsPage() {
     const { user, token, isLoading } = useAuth()
     const router = useRouter()
 
-    const claimId = typeof window !== 'undefined'
-        ? new URLSearchParams(window.location.search).get('claim_id')
-        : null
+    const [claimId, setClaimId] = useState<string | null>(null)
     const [documents, setDocuments] = useState<UploadedDocument[]>([])
     const [loading, setLoading] = useState(true)
+    const [initialized, setInitialized] = useState(false)
+
+    // Get claim ID from URL on mount
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const urlClaimId = new URLSearchParams(window.location.search).get('claim_id')
+            console.log('📋 Step 2: Checking URL for claim_id:', urlClaimId)
+            if (urlClaimId) {
+                setClaimId(urlClaimId)
+                console.log('✅ Step 2: Claim ID set from URL:', urlClaimId)
+            }
+            setInitialized(true)
+        }
+    }, [])
 
     // Redirect if not authenticated
     useEffect(() => {
@@ -35,12 +47,13 @@ export default function Step2DocumentsPage() {
         }
     }, [user, isLoading, router])
 
-    // Redirect if no claim ID
+    // Redirect if no claim ID (only after initialization)
     useEffect(() => {
-        if (!claimId) {
+        if (initialized && !claimId) {
+            console.log('⚠️ Step 2: No claim ID found, redirecting to step 1')
             router.push('/upload/step1')
         }
-    }, [claimId, router])
+    }, [initialized, claimId, router])
 
     // Fetch documents
     useEffect(() => {
