@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import timedelta
+import logging
 
 from app.utils.database import get_db
 from app.schemas.schemas import PolicyHolderResponse
@@ -17,6 +18,8 @@ from app.services.auth_service import (
 )
 from app.models.models import PolicyHolder
 from pydantic import BaseModel, EmailStr
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
@@ -79,7 +82,7 @@ async def register(user_data: RegisterRequest, db: Session = Depends(get_db)):
         )
     
     # Import here to avoid circular dependency
-    from app.models import PolicyHolder
+    from app.models import PolicyHolder, PolicyStatus
     from app.services.auth_service import get_password_hash
     from datetime import datetime, timedelta
     from app.utils.id_generator import generate_policy_holder_id
@@ -112,7 +115,7 @@ async def register(user_data: RegisterRequest, db: Session = Depends(get_db)):
         join_date=registration_datetime,              # Current datetime
         policy_terms_id=policy_terms_id,              # PLUM_OPD_2024
         policy_start_date=registration_datetime,      # Same as join_date initially
-        policy_status="ACTIVE",                       # Set to ACTIVE
+        policy_status=PolicyStatus.ACTIVE,            # Use enum instead of string
         waiting_period_completed=waiting_period_completed,  # False for new users
         annual_limit=50000.0,                         # From policy_terms.json
         annual_limit_used=0.0,                        # No usage yet

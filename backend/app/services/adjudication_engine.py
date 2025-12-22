@@ -197,6 +197,12 @@ class AdjudicationEngine:
         if not limits["passed"]: errors.extend(limits["errors"])
         if not medical["passed"]: errors.extend(medical["errors"])
         
+        # Calculate confidence score based on validation results
+        confidence = self._calculate_confidence(
+            eligibility, documents, coverage, limits, medical
+        )
+        decision.confidence_score = confidence
+        
         if errors:
             decision.decision = DecisionType.REJECTED
             decision.rejection_reasons = errors
@@ -204,6 +210,8 @@ class AdjudicationEngine:
         elif fraud.get("suspicious", False):
             decision.decision = DecisionType.MANUAL_REVIEW
             decision.rejection_reasons = ["Fraud Suspected"]
+            # Lower confidence for fraud cases
+            decision.confidence_score = max(0.5, confidence - 0.2)
         else:
              decision.decision = DecisionType.APPROVED
              decision.approved_amount = limits.get("approved_amount", total_amount)
@@ -318,22 +326,56 @@ class AdjudicationEngine:
         return decision
     
     def _calculate_confidence(self, *validation_results) -> float:
-        """Calculate overall confidence score"""
-        base_score = 1.0
+        """
+        Calculate overall confidence score based on validation results
         
-        # Deduct for failed checks
+        Logic:
+        - All validators pass: 0.95-1.0 (very confident)
+        - 1 validator fails: 0.75-0.85 (moderately confident)
+        - 2 validators fail: 0.60-0.70 (low confidence)
+        - 3+ validators fail: 0.40-0.55 (very low confidence)
+        """
+        total_validators = len(validation_results)
+        passed_validators = 0
+        failed_validators = 0
+        
         for result in validation_results:
-            if isinstance(result, dict) and not result.get("passed", True):
-                base_score -= 0.1
+            if isinstance(result, dict):
+                if result.get("passed", True):
+                    passed_validators += 1
+                else:
+                    failed_validators += 1
         
-        return max(0.0, min(1.0, base_score))
+        if total_validators == 0:
+            return 0.5  # Default if no validators
+        
+        # Calculate base confidence
+        pass_rate = passed_validators / total_validators
+        
+        # Map pass rate to confidence score
+        if pass_rate == 1.0:
+            # All passed - very confident
+            return 0.95
+        elif pass_rate >= 0.8:
+            # 4/5 passed - moderately confident
+            return 0.80
+        elif pass_rate >= 0.6:
+            # 3/5 passed - low confidence
+            return 0.65
+        elif pass_rate >= 0.4:
+            # 2/5 passed - very low confidence
+            return 0.50
+        else:
+            # Most failed - extremely low confidence
+            return 0.40
+
     
     def _create_rejection(self, decision: ClaimDecision, errors: List[str]) -> ClaimDecision:
         """Create a rejection decision"""
         decision.decision = DecisionType.REJECTED
         decision.rejection_reasons = errors
         decision.approved_amount = 0.0
-        decision.confidence_score = 0.95
+        # Note: confidence_score is now calculated in the main adjudication flow
         decision.notes = f"Claim rejected due to: {', '.join(errors)}"
         decision.next_steps = "Please contact support for more information or submit corrected documents."
         return decision
