@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../../contexts/AuthContext'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import axios from 'axios'
 import { ArrowLeft } from 'lucide-react'
 
@@ -24,9 +24,10 @@ interface ClaimData {
 export default function Step3ClaimStatusPage() {
     const { user, token, isLoading } = useAuth()
     const router = useRouter()
-    const searchParams = useSearchParams()
 
-    const claimId = searchParams.get('claim_id')
+    const claimId = typeof window !== 'undefined'
+        ? new URLSearchParams(window.location.search).get('claim_id')
+        : null
     const [claimData, setClaimData] = useState<ClaimData | null>(null)
     const [loading, setLoading] = useState(true)
 

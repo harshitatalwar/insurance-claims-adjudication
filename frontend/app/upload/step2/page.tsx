@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../../contexts/AuthContext'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import axios from 'axios'
 import { Check, ArrowLeft } from 'lucide-react'
 
@@ -21,9 +21,10 @@ interface UploadedDocument {
 export default function Step2DocumentsPage() {
     const { user, token, isLoading } = useAuth()
     const router = useRouter()
-    const searchParams = useSearchParams()
 
-    const claimId = searchParams.get('claim_id')
+    const claimId = typeof window !== 'undefined'
+        ? new URLSearchParams(window.location.search).get('claim_id')
+        : null
     const [documents, setDocuments] = useState<UploadedDocument[]>([])
     const [loading, setLoading] = useState(true)
 

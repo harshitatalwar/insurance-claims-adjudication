@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../../../contexts/AuthContext'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import axios from 'axios'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'
@@ -10,9 +10,10 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'
 export default function Step1UploadPage() {
     const { user, policyHolder, token, isLoading } = useAuth()
     const router = useRouter()
-    const searchParams = useSearchParams()
 
-    const urlClaimId = searchParams.get('claim_id')
+    const urlClaimId = typeof window !== 'undefined'
+        ? new URLSearchParams(window.location.search).get('claim_id')
+        : null
     const [claimId, setClaimId] = useState<string | null>(() => {
         if (typeof window !== 'undefined') {
             const cached = localStorage.getItem('current_claim_id')
@@ -256,8 +257,8 @@ export default function Step1UploadPage() {
                         {/* Drag & Drop Zone */}
                         <div
                             className={`border-2 border-dashed rounded-xl p-12 text-center transition-all ${dragActive
-                                    ? 'border-blue-500 bg-blue-50'
-                                    : 'border-gray-300 hover:border-blue-400'
+                                ? 'border-blue-500 bg-blue-50'
+                                : 'border-gray-300 hover:border-blue-400'
                                 }`}
                             onDragEnter={handleDrag}
                             onDragLeave={handleDrag}
