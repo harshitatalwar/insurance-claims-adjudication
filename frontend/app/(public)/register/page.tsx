@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useAuth } from '../../contexts/AuthContext'
+import { useAuth } from '../../../contexts/AuthContext'
 import { User, Lock, Mail, Phone, Calendar } from 'lucide-react'
 import Link from 'next/link'
 

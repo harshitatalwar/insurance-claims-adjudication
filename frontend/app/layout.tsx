@@ -1,12 +1,11 @@
 import './globals.css'
 import { Inter } from 'next/font/google'
-import { AuthProvider } from '../contexts/AuthContext'
 
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata = {
   title: 'Plum OPD Claim Adjudication',
-  description: 'AI-powered outpatient claim processing system',
+  description: 'AI-powered OPD claim processing system',
 }
 
 export default function RootLayout({
@@ -17,11 +16,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <AuthProvider>
-          <div className="min-h-screen bg-insurance-light">
-            {children}
-          </div>
-        </AuthProvider>
+        {children}
       </body>
     </html>
   )

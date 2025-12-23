@@ -1,10 +1,8 @@
 'use client'
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import axios from 'axios'
 import { useRouter } from 'next/navigation'
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'
+import { api } from '../utils/api-client'
 
 interface User {
     email: string
@@ -27,9 +25,11 @@ interface AuthContextType {
     policyHolder: PolicyHolder | null
     token: string | null
     isLoading: boolean
+    isInitialized: boolean
     login: (email: string, password: string) => Promise<void>
     register: (data: RegisterData) => Promise<void>
     logout: () => void
+    initializeAuth: () => Promise<void>
 }
 
 interface RegisterData {
@@ -46,74 +46,112 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null)
     const [policyHolder, setPolicyHolder] = useState<PolicyHolder | null>(null)
     const [token, setToken] = useState<string | null>(null)
-    const [isLoading, setIsLoading] = useState(true)
+    const [isLoading, setIsLoading] = useState(false)
+    const [isInitialized, setIsInitialized] = useState(false)
     const router = useRouter()
 
-    // Initialize auth state from localStorage
+    // Initialize token from localStorage on mount (but don't validate it)
     useEffect(() => {
         const storedToken = localStorage.getItem('access_token')
         if (storedToken) {
             setToken(storedToken)
-            fetchUserData(storedToken)
-        } else {
-            setIsLoading(false)
         }
     }, [])
 
     const fetchUserData = async (accessToken: string) => {
         try {
+            // Set token in localStorage so API client can use it
+            localStorage.setItem('access_token', accessToken)
+
             // 1. Get user info
-            const userResponse = await axios.get(`${API_BASE_URL}/api/auth/me`, {
-                headers: { Authorization: `Bearer ${accessToken}` }
-            })
-            setUser(userResponse.data)
-            console.log('✅ User fetched:', userResponse.data)
+            console.log('🔍 Fetching user data...')
+            const userData = await api.auth.me()
+            setUser(userData)
+            console.log('✅ User fetched:', userData)
 
             // 2. Get policy holder info by email
-            const policyHoldersResponse = await axios.get(`${API_BASE_URL}/api/policy-holders/`, {
-                headers: { Authorization: `Bearer ${accessToken}` }
-            })
-            console.log('✅ Policy holders fetched:', policyHoldersResponse.data)
+            console.log('🔍 Fetching policy holders...')
+            const policyHolders = await api.policyHolders.list()
+            console.log('✅ Policy holders fetched:', policyHolders)
 
-            const policyHolder = policyHoldersResponse.data.find(
-                (ph: PolicyHolder) => ph.email === userResponse.data.email
+            const policyHolder = policyHolders.find(
+                (ph: PolicyHolder) => ph.email === userData.email
             )
 
             if (policyHolder) {
                 setPolicyHolder(policyHolder)
                 console.log('✅ Policy holder set:', policyHolder.policy_holder_id)
             } else {
-                console.error('❌ No policy holder found for email:', userResponse.data.email)
+                console.error('❌ No policy holder found for email:', userData.email)
+                throw new Error('Policy holder not found for this email')
             }
-        } catch (error) {
-            console.error('Failed to fetch user data:', error)
-            // Token might be invalid, clear it
-            localStorage.removeItem('access_token')
-            setToken(null)
+        } catch (error: any) {
+            console.error('❌ fetchUserData error:', error)
+
+            // Clear auth state on error
+            if (error.response?.status === 401) {
+                localStorage.removeItem('access_token')
+                setToken(null)
+                setUser(null)
+                setPolicyHolder(null)
+            }
+
+            // Re-throw the error so register/login know it failed
+            throw error
         } finally {
             setIsLoading(false)
         }
     }
 
+    // Lazy initialization - only called by protected routes
+    const initializeAuth = async () => {
+        // Skip if already initialized or currently loading
+        if (isInitialized || isLoading) {
+            return
+        }
+
+        setIsLoading(true)
+
+        const storedToken = localStorage.getItem('access_token')
+        if (storedToken) {
+            setToken(storedToken)
+            await fetchUserData(storedToken)
+        } else {
+            setIsLoading(false)
+        }
+
+        setIsInitialized(true)
+    }
+
     const login = async (email: string, password: string) => {
         try {
-            // Use form data for OAuth2 password flow
-            const formData = new FormData()
-            formData.append('username', email)
-            formData.append('password', password)
+            console.log('🔐 Starting login...')
+            const response = await api.auth.login(email, password)
+            console.log('✅ Login API response:', response)
 
-            const response = await axios.post(`${API_BASE_URL}/api/auth/login`, formData, {
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-            })
-
-            const accessToken = response.data.access_token
+            const accessToken = response.access_token
             localStorage.setItem('access_token', accessToken)
             setToken(accessToken)
+            console.log('✅ Token saved to localStorage')
+
+            // Reset initialization flag and fetch user data
+            setIsInitialized(false)
+            setIsLoading(true)
+            console.log('🔍 Fetching user data...')
 
             await fetchUserData(accessToken)
+            console.log('✅ User data fetched successfully')
+
+            setIsInitialized(true)
+            console.log('✅ Auth initialized')
+
+            // Redirect after user data is loaded
+            console.log('🚀 Redirecting to /upload...')
             router.push('/upload')
+            console.log('✅ Redirect called')
         } catch (error: any) {
-            console.error('Login failed:', error)
+            console.error('❌ Login failed:', error)
+            setIsLoading(false)
             throw new Error(error.response?.data?.detail || 'Login failed')
         }
     }
@@ -121,37 +159,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const register = async (data: RegisterData) => {
         try {
             // Register creates both auth user and policy holder in one call
-            const authResponse = await axios.post(`${API_BASE_URL}/api/auth/register`, {
-                full_name: data.full_name,
-                email: data.email,
-                phone: data.phone,
-                date_of_birth: data.date_of_birth,
-                password: data.password
-            })
-
-            const accessToken = authResponse.data.access_token
+            const response = await api.auth.register(data)
+            const accessToken = response.access_token
             localStorage.setItem('access_token', accessToken)
             setToken(accessToken)
 
-            // Fetch complete user data
+            // Reset initialization flag and fetch user data
+            setIsInitialized(false)
+            setIsLoading(true)
             await fetchUserData(accessToken)
+            setIsInitialized(true)
+
+            // Redirect after user data is loaded
             router.push('/upload')
         } catch (error: any) {
             console.error('Registration failed:', error)
+            setIsLoading(false)
             throw new Error(error.response?.data?.detail || 'Registration failed')
         }
     }
 
     const logout = () => {
-        localStorage.removeItem('access_token')
+        api.auth.logout()
         setToken(null)
         setUser(null)
         setPolicyHolder(null)
+        setIsInitialized(false)  // Reset initialization flag
+        setIsLoading(false)
         router.push('/landing')
     }
 
     return (
-        <AuthContext.Provider value={{ user, policyHolder, token, isLoading, login, register, logout }}>
+        <AuthContext.Provider value={{ user, policyHolder, token, isLoading, isInitialized, login, register, logout, initializeAuth }}>
             {children}
         </AuthContext.Provider>
     )

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -11,20 +11,32 @@ export default function ProtectedRoute({
     children: React.ReactNode;
     requiredRole?: string;
 }) {
-    const { user, isLoading } = useAuth();
+    const { user, isLoading, initializeAuth } = useAuth();
     const router = useRouter();
+    const [authChecked, setAuthChecked] = useState(false);
 
+    // Trigger auth check on mount
     useEffect(() => {
-        if (!isLoading) {
+        const checkAuth = async () => {
+            await initializeAuth();
+            setAuthChecked(true);
+        };
+        checkAuth();
+    }, [initializeAuth]);
+
+    // Redirect after auth check completes
+    useEffect(() => {
+        if (authChecked && !isLoading) {
             if (!user) {
                 router.push('/login');
             } else if (requiredRole && user.role !== requiredRole) {
                 router.push('/unauthorized');
             }
         }
-    }, [user, isLoading, requiredRole, router]);
+    }, [authChecked, user, isLoading, requiredRole, router]);
 
-    if (isLoading) {
+    // Show loading while checking auth
+    if (!authChecked || isLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center gradient-bg">
                 <div className="text-center">
@@ -35,6 +47,7 @@ export default function ProtectedRoute({
         );
     }
 
+    // Don't render if not authenticated or wrong role
     if (!user || (requiredRole && user.role !== requiredRole)) {
         return null;
     }

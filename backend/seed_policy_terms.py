@@ -12,7 +12,7 @@ def seed_policy_terms():
     try:
         # Check if policy already exists
         existing = db.query(PolicyTerms).filter(
-            PolicyTerms.policy_id == "Insureho_OPD_2024"
+            PolicyTerms.policy_id == "PLUM_OPD_2024"
         ).first()
         
         if existing:
@@ -21,8 +21,8 @@ def seed_policy_terms():
         
         # Create policy terms
         policy = PolicyTerms(
-            policy_id="Insureho_OPD_2024",
-            policy_name="Insureho OPD Advantage",
+            policy_id="PLUM_OPD_2024",
+            policy_name="PLUM OPD Advantage",
             effective_date=datetime(2024, 1, 1),
             
             # Limits

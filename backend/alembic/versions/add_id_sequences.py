@@ -61,7 +61,7 @@ def upgrade():
                 (SELECT MAX(CAST(SUBSTRING(claim_id FROM 4) AS INTEGER))
                  FROM claims
                  WHERE claim_id ~ '^CLM[0-9]+$'),
-                0
+                1
             )
         );
     """)
@@ -73,7 +73,7 @@ def upgrade():
                 (SELECT MAX(CAST(SUBSTRING(policy_holder_id FROM 3) AS INTEGER))
                  FROM policy_holders
                  WHERE policy_holder_id ~ '^PH[0-9]+$'),
-                0
+                1
             )
         );
     """)

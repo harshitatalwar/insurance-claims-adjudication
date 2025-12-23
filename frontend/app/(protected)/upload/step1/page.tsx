@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useAuth } from '../../../contexts/AuthContext'
+import { useAuth } from '../../../../contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import axios from 'axios'
 
@@ -38,13 +38,6 @@ export default function Step1UploadPage() {
             }
         }
     }, [])
-
-    // Redirect if not authenticated
-    useEffect(() => {
-        if (!isLoading && !user) {
-            router.push('/login')
-        }
-    }, [user, isLoading, router])
 
     // Auto-create claim
     useEffect(() => {
@@ -213,7 +206,10 @@ export default function Step1UploadPage() {
         }
     }
 
-    if (isLoading) {
+    console.log('🔍 Step1 render - isLoading:', isLoading, 'user:', user ? 'SET' : 'NULL', 'policyHolder:', policyHolder ? 'SET' : 'NULL')
+
+    if (isLoading || !user) {
+        console.log('⏳ Showing loading state - isLoading:', isLoading, 'user:', user)
         return (
             <div className="min-h-screen flex items-center justify-center">
                 <div className="text-xl">Loading...</div>
@@ -221,9 +217,7 @@ export default function Step1UploadPage() {
         )
     }
 
-    if (!user) {
-        return null
-    }
+    console.log('✅ Rendering upload UI')
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-8">
