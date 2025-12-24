@@ -54,7 +54,17 @@ class MinIOStorageService(StorageInterface):
                 endpoint=f"{settings.MINIO_HOST}:{settings.MINIO_PORT}",
                 access_key=settings.MINIO_ACCESS_KEY,
                 secret_key=settings.MINIO_SECRET_KEY,
-                secure=settings.MINIO_SECURE
+                secure=settings.MINIO_SECURE,
+                region="us-east-1"  # Explicit region prevents auto-discovery network calls
+            )
+            # Public client for generating presigned URLs (browser access)
+            # using 'localhost' ensures the signature matches the Host header sent by the browser.
+            self.public_client = Minio(
+                endpoint=f"localhost:{settings.MINIO_PORT}",
+                access_key=settings.MINIO_ACCESS_KEY,
+                secret_key=settings.MINIO_SECRET_KEY,
+                secure=settings.MINIO_SECURE,
+                region="us-east-1"  # Explicit region prevents auto-discovery network calls (fixing 500 error)
             )
             self.bucket_name = settings.MINIO_BUCKET_NAME
             logger.info(f"[MINIO] Client created successfully")
@@ -153,7 +163,8 @@ class MinIOStorageService(StorageInterface):
             if expires is None:
                 expires = timedelta(minutes=15)
             
-            url = self.client.presigned_put_object(
+            # Use public_client to generate URL with localhost signature
+            url = self.public_client.presigned_put_object(
                 bucket_name=self.bucket_name,
                 object_name=object_name,
                 expires=expires
@@ -177,7 +188,8 @@ class MinIOStorageService(StorageInterface):
             if expires is None:
                 expires = timedelta(hours=1)
             
-            url = self.client.presigned_get_object(
+            # Use public_client to generate URL with localhost signature
+            url = self.public_client.presigned_get_object(
                 bucket_name=self.bucket_name,
                 object_name=object_name,
                 expires=expires

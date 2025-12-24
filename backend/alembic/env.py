@@ -66,8 +66,16 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
+    # Overwrite sqlalchemy.url with environment variable if it exists
+    config_section = config.get_section(config.config_ini_section, {})
+    
+    # Priority: Env Var > Config File
+    env_db_url = os.getenv("DATABASE_URL")
+    if env_db_url:
+        config_section["sqlalchemy.url"] = env_db_url
+
     connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
+        config_section,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
