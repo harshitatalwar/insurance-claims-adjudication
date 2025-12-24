@@ -134,6 +134,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setToken(accessToken)
             console.log('✅ Token saved to localStorage')
 
+            // Clear any stale claim data from previous sessions
+            localStorage.removeItem('current_claim_id')
+            // Also might want to clear specific claim flags if possible, but minimal reset is essential
+
             // Reset initialization flag and fetch user data
             setIsInitialized(false)
             setIsLoading(true)
@@ -164,6 +168,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             localStorage.setItem('access_token', accessToken)
             setToken(accessToken)
 
+            // Clear any stale claim data
+            localStorage.removeItem('current_claim_id')
+
             // Reset initialization flag and fetch user data
             setIsInitialized(false)
             setIsLoading(true)
@@ -184,6 +191,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setToken(null)
         setUser(null)
         setPolicyHolder(null)
+        localStorage.removeItem('current_claim_id')
         setIsInitialized(false)  // Reset initialization flag
         setIsLoading(false)
         router.push('/landing')

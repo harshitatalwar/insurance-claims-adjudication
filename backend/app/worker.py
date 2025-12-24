@@ -247,6 +247,9 @@ def adjudicate_claim_task(self, claim_id: str):
                 "pre_existing_conditions": policy_holder.pre_existing_conditions or []
             }
             
+            # Run adjudication with full context
+            engine = AdjudicationEngine()
+            
             logger.info(f"📋 Loaded policy terms: {engine.policy_terms.get('policy_id', 'Unknown')}")
             
             # Build adjudication context (runtime merge - separation of concerns)

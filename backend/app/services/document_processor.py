@@ -14,7 +14,7 @@ from typing import Dict, Any
 
 from app.services.minio_service import get_storage_service
 # from app.services.rag_service import RAGService  # DISABLED - Not needed for OCR
-from app.services.redis_rate_limiter import RedisRateLimiter, log_usage_async
+from app.services.redis_rate_limiter import RedisRateLimiter, log_usage_async, _calculate_cost
 from app.config import settings
 from app.utils.database import SessionLocal
 from openai import AsyncOpenAI
@@ -80,7 +80,6 @@ class DocumentProcessor:
             # Check if we have quota before doing any work
             logger.info(f"🔒 Checking rate limits...")
             self.rate_limiter.check_and_wait(
-                db, 
                 estimated_tokens=2000,  # Conservative estimate
                 document_id=file_id
             )
@@ -97,7 +96,7 @@ class DocumentProcessor:
                 logger.error(f"❌ MinIO download failed: {e}")
                 logger.error(f"   Bucket: {self.minio_service.bucket_name}")
                 logger.error(f"   Object: {object_name}")
-                self.rate_limiter.log_usage(
+                log_usage_async(
                     db, file_id, document_type, self.model,
                     0, 0, None, "failed", f"MinIO error: {str(e)}"
                 )
@@ -156,7 +155,7 @@ class DocumentProcessor:
                 
             except Exception as e:
                 logger.error(f"❌ OpenAI API call failed: {e}")
-                self.rate_limiter.log_usage(
+                log_usage_async(
                     db, file_id, document_type, self.model,
                     0, 0, None, "error", str(e)
                 )
@@ -164,7 +163,7 @@ class DocumentProcessor:
             
             # STEP 6: LOG API USAGE
             usage = response.usage
-            self.rate_limiter.log_usage(
+            log_usage_async(
                 db=db,
                 document_id=file_id,
                 document_type=document_type,
@@ -236,7 +235,7 @@ class DocumentProcessor:
                 "confidence_score": quality_score,  # Now intelligently calculated!
                 "score_breakdown": score_breakdown,
                 "tokens_used": usage.total_tokens,
-                "cost_usd": self.rate_limiter._calculate_cost(
+                "cost_usd": _calculate_cost(
                     self.model, usage.prompt_tokens, usage.completion_tokens
                 ),
                 "processing_time_ms": total_time

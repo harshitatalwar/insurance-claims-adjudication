@@ -30,10 +30,10 @@ This production-ready application automates the complete lifecycle of OPD insura
 - **ORM**: SQLAlchemy with Alembic migrations
 
 #### **Frontend**
-- **Framework**: Next.js (React, TypeScript)
-- **Styling**: TailwindCSS
+- **Framework**: Next.js (App Router)
+- **Styling**: TailwindCSS (CSS-first configuration)
 - **State Management**: React Context API
-- **Real-time**: Server-Sent Events (SSE) / WebSocket
+- **Real-time**: Server-Sent Events (SSE)
 
 #### **Infrastructure**
 - **Containerization**: Docker + Docker Compose
@@ -132,11 +132,7 @@ Events:
 opd-claims-adjudication/
 ├── backend/
 │   ├── app/
-│   │   ├── api/              # REST endpoints
-│   │   │   ├── auth.py       # Registration, login
-│   │   │   ├── upload.py     # Presigned URL generation
-│   │   │   ├── claims.py     # Claim CRUD
-│   │   │   └── adjudication.py  # Manual adjudication
+│   │   ├── api/              # REST endpoints (auth, upload, claims)
 │   │   ├── services/         # Business logic
 │   │   │   ├── document_processor.py  # GPT-4o Vision OCR
 │   │   │   ├── adjudication_engine.py # Decision engine
@@ -150,10 +146,16 @@ opd-claims-adjudication/
 │
 ├── frontend/
 │   ├── app/
-│   │   ├── register/         # User registration
-│   │   ├── login/            # Authentication
-│   │   └── upload/           # Multi-step claim upload
-│   ├── components/           # Reusable UI components
+│   │   ├── globals.css       # Tailwind Theme Configuration
+│   │   ├── (public)/         # Public routes (Login, Register)
+│   │   └── (protected)/      # Secure routes (Upload Flow)
+│   │       ├── upload/
+│   │       │   ├── step1/    # Dashboard & Upload
+│   │       │   ├── step2/    # Real-time Processing View
+│   │       │   └── step3/    # Adjudication Results
+│   ├── components/
+│   │   └── ui/               # Reusable Glassmorphism components
+│   ├── contexts/             # AuthContext
 │   └── Dockerfile
 │
 ├── docker-compose.yml        # Full stack orchestration
@@ -207,7 +209,7 @@ docker compose exec backend poetry run python seed_policy_terms.py
 
 ---
 
-## 🔑 Key Features
+## Key Features
 
 ### **1. Intelligent Document Processing**
 - **GPT-4o Vision**: Extracts structured data from images/PDFs

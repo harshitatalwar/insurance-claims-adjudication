@@ -1,322 +1,147 @@
 # Deployment Guide
 
-This guide covers deploying the OPD Claims Adjudication System in both development and production environments.
+This guide covers deploying the **OpenAI OPD Claims Adjudication System** in both development and production environments.
 
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
-- [Database Migrations](#database-migrations)
+- [Architecture Overview](#architecture-overview)
 - [Environment Configuration](#environment-configuration)
+- [Database Migrations](#database-migrations)
+- [Docker Deployment (Recommended)](#docker-deployment-recommended)
 - [Local Development](#local-development)
-- [Docker Deployment](#docker-deployment)
 - [Production Checklist](#production-checklist)
 
 ---
 
 ## Prerequisites
 
-- Python 3.11+
-- PostgreSQL 13+
-- Docker & Docker Compose (for containerized deployment)
-- Poetry (for dependency management)
+- **Docker & Docker Compose** (Essential for full-stack deployment)
+- **Node.js 18+** (For frontend local dev)
+- **Python 3.11+** (For backend local dev)
+- **OpenAI API Key** (Required for GPT-4o Vision)
 
 ---
 
-## Database Migrations
+## Architecture Overview
 
-### Important: Migration-First Approach
-
-This application uses **Alembic** for database schema management. The application **will not** automatically create tables on startup.
-
-### Initial Setup
-
-1. **Initialize Alembic** (if not already done):
-   ```bash
-   cd backend
-   alembic init alembic
-   ```
-
-2. **Configure Alembic** (`alembic.ini`):
-   - Update `sqlalchemy.url` to match your `DATABASE_URL`
-   - Or use environment variables (recommended)
-
-3. **Create Initial Migration**:
-   ```bash
-   # Auto-generate migration from models
-   alembic revision --autogenerate -m "Initial schema"
-   
-   # Review the generated migration in alembic/versions/
-   ```
-
-4. **Apply Migrations**:
-   ```bash
-   alembic upgrade head
-   ```
-
-### Common Migration Commands
-
-```bash
-# Create a new migration
-alembic revision --autogenerate -m "Description of changes"
-
-# Apply all pending migrations
-alembic upgrade head
-
-# Rollback one migration
-alembic downgrade -1
-
-# View migration history
-alembic history
-
-# View current version
-alembic current
-```
+The system consists of 7 interconnected services:
+1.  **Backend (FastAPI)**: API & Business Logic (Port 8000)
+2.  **Frontend (Next.js)**: User Interface (Port 3000)
+3.  **Worker (Celery)**: Async tasks (OCR, Adjudication)
+4.  **PostgreSQL**: Relational Database
+5.  **Redis**: Broker, Pub/Sub, & Caching
+6.  **MinIO**: Object Storage (S3 Compatible)
+7.  **Qdrant**: Vector Database
 
 ---
 
 ## Environment Configuration
 
-### Docker vs. Local Development
+You must configure environment variables for both Backend and Frontend.
 
-The application defaults are optimized for **Docker Compose** deployments. For local development, you need to override certain environment variables.
-
-### Docker Compose (Default)
-
-Create a `.env` file in the `backend/` directory:
+### 1. Root `.env` (Docker Compose)
+Create a `.env` file in the project root:
 
 ```env
-# Application
-DEBUG=True
-SECRET_KEY=your-secret-key-change-in-production
+# --- Application ---
+SECRET_KEY=change-this-to-a-secure-random-key
+ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 
-# Database (Docker service name)
-DATABASE_URL=postgresql://postgres:postgres@postgres:5432/opd_claims
+# --- OpenAI ---
+OPENAI_API_KEY=sk-proj-your-key-here
 
-# OpenAI
-OPENAI_API_KEY=sk-your-api-key
+# --- Database ---
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=opd_claims
 
-# Qdrant (Docker service name)
-QDRANT_HOST=qdrant
-QDRANT_PORT=6333
-
-# MinIO (Docker service name)
-MINIO_HOST=minio
-MINIO_PORT=9000
-MINIO_ACCESS_KEY=minioadmin
-MINIO_SECRET_KEY=minioadmin123
+# --- MinIO ---
+MINIO_ROOT_USER=minioadmin
+MINIO_ROOT_PASSWORD=minioadmin123
 ```
 
-### Local Development
-
-For local development (without Docker Compose):
+### 2. Frontend `.env.local`
+Create `frontend/.env.local`:
 
 ```env
-# Application
-DEBUG=True
-SECRET_KEY=your-secret-key
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
 
-# Database (localhost)
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/opd_claims
+---
 
-# OpenAI
-OPENAI_API_KEY=sk-your-api-key
+## Docker Deployment (Recommended)
 
-# Qdrant (localhost)
-QDRANT_HOST=localhost
-QDRANT_PORT=6333
+The easiest way to run the entire stack is using Docker Compose.
 
-# MinIO (localhost)
-MINIO_HOST=localhost
-MINIO_PORT=9000
-MINIO_ACCESS_KEY=minioadmin
-MINIO_SECRET_KEY=minioadmin123
+### 1. Build and Run
+```bash
+docker compose up -d --build
+```
+This will start all services. 
+- Frontend: `http://localhost:3000`
+- Backend Docs: `http://localhost:8000/docs`
+- MinIO Console: `http://localhost:9001`
+
+### 2. Run Database Migrations
+**Critical Step**: The database is empty on first launch. You must run migrations.
+
+```bash
+docker compose exec backend poetry run alembic upgrade head
+```
+
+### 3. Seed Policy Data (Optional)
+To test adjudication, seed sample policy terms:
+```bash
+docker compose exec backend poetry run python seed_policy_terms.py
+```
+
+### 4. Viewing Logs
+```bash
+# Backend logs
+docker compose logs -f backend
+
+# Celery Worker logs (Important for debugging OCR/Adjudication)
+docker compose logs -f celery_worker
+```
+
+### 5. Stop Services
+```bash
+docker compose down
 ```
 
 ---
 
 ## Local Development
 
-### 1. Install Dependencies
+If you want to run services individually without Docker (not recommended for beginners).
 
-```bash
-cd backend
-poetry install
-```
+### Backend
+1.  **Install**: `cd backend && poetry install`
+2.  **Run Dependencies**: You still need Redis/Postgres/MinIO running (use Docker for these).
+3.  **Run App**: `poetry run uvicorn app.main:app --reload`
+4.  **Run Worker**: `poetry run celery -A app.worker.celery_app worker --loglevel=info`
 
-### 2. Start External Services
-
-You can run Qdrant and MinIO locally via Docker:
-
-```bash
-# Qdrant
-docker run -p 6333:6333 qdrant/qdrant
-
-# MinIO
-docker run -p 9000:9000 -p 9001:9001 \
-  -e MINIO_ROOT_USER=minioadmin \
-  -e MINIO_ROOT_PASSWORD=minioadmin123 \
-  minio/minio server /data --console-address ":9001"
-
-# PostgreSQL
-docker run -p 5432:5432 \
-  -e POSTGRES_PASSWORD=postgres \
-  -e POSTGRES_DB=opd_claims \
-  postgres:15
-```
-
-### 3. Run Migrations
-
-```bash
-alembic upgrade head
-```
-
-### 4. Start the Application
-
-```bash
-# Using Poetry
-poetry run uvicorn app.main:app --reload
-
-# Or activate the virtual environment
-poetry shell
-uvicorn app.main:app --reload
-```
-
----
-
-## Docker Deployment
-
-### Build Images
-
-```bash
-# From project root
-docker compose build
-```
-
-### Run Services
-
-```bash
-docker compose up -d
-```
-
-### Run Migrations in Container
-
-```bash
-# Execute migrations inside the backend container
-docker compose exec backend alembic upgrade head
-```
-
-### View Logs
-
-```bash
-# All services
-docker compose logs -f
-
-# Specific service
-docker compose logs -f backend
-```
-
-### Stop Services
-
-```bash
-docker compose down
-
-# Remove volumes (WARNING: deletes data)
-docker compose down -v
-```
+### Frontend
+1.  **Install**: `cd frontend && npm install`
+2.  **Run**: `npm run dev`
+3.  **Access**: `http://localhost:3000`
 
 ---
 
 ## Production Checklist
 
 ### Security
-
-- [ ] Change `SECRET_KEY` to a strong random value
-- [ ] Set `DEBUG=False`
-- [ ] Use strong passwords for PostgreSQL, MinIO
-- [ ] Enable HTTPS/TLS (`MINIO_SECURE=True`)
-- [ ] Restrict CORS origins (`ALLOWED_ORIGINS`)
-- [ ] Use environment-specific `.env` files (never commit to git)
-
-### Database
-
-- [ ] Use managed PostgreSQL service (AWS RDS, Google Cloud SQL, etc.)
-- [ ] Enable automated backups
-- [ ] Set up connection pooling
-- [ ] Run migrations before deploying new code: `alembic upgrade head`
-
-### Dependencies
-
-- [ ] Verify `psycopg2` (not `psycopg2-binary`) is installed
-- [ ] Ensure `libpq-dev` is available in build environment
-- [ ] Lock dependency versions in `poetry.lock`
-
-### Monitoring
-
-- [ ] Set up application logging
-- [ ] Configure error tracking (Sentry, etc.)
-- [ ] Monitor database performance
-- [ ] Set up health check endpoints
+- [ ] Change `SECRET_KEY`, `POSTGRES_PASSWORD`, `MINIO_ROOT_PASSWORD`.
+- [ ] Set `minioadmin` credentials to strong values.
+- [ ] Restrict `ALLOWED_ORIGINS` to your production domain only.
+- [ ] Use **HTTPS** (Reverse Proxy like Nginx/Traefik in front of FastAPI and Next.js).
 
 ### Infrastructure
+- [ ] Use specialized services for persistence (AWS RDS for Postgres, AWS S3 instead of MinIO).
+- [ ] Set `DEBUG=False` in backend.
+- [ ] Configure `NEXT_PUBLIC_API_URL` to your production API domain (e.g., `https://api.yourdomain.com`).
 
-- [ ] Use container orchestration (Kubernetes, ECS, etc.)
-- [ ] Configure auto-scaling
-- [ ] Set resource limits (CPU, memory)
-- [ ] Use persistent volumes for uploads
-- [ ] Set up load balancer
-
-### Testing
-
-- [ ] Run full test suite before deployment
-- [ ] Test migrations on staging environment
-- [ ] Verify all environment variables are set
-- [ ] Test service connectivity (Qdrant, MinIO, PostgreSQL)
-
----
-
-## Troubleshooting
-
-### "No module named 'psycopg2'"
-
-**Solution**: Ensure `libpq-dev` is installed and rebuild:
-```bash
-# Debian/Ubuntu
-apt-get install libpq-dev
-
-# Rebuild Docker image
-docker compose build --no-cache backend
-```
-
-### "Connection refused" to Qdrant/MinIO
-
-**Solution**: Check environment variables:
-- **Docker**: Use service names (`qdrant`, `minio`)
-- **Local**: Use `localhost`
-
-### "Alembic can't locate revision"
-
-**Solution**: Ensure migrations are in sync:
-```bash
-# Check current version
-alembic current
-
-# Stamp database with current version
-alembic stamp head
-```
-
-### Tables not created
-
-**Solution**: Run migrations manually:
-```bash
-alembic upgrade head
-```
-
-The application no longer auto-creates tables via `create_all()`.
-
----
-
-## Additional Resources
-
-- [Alembic Documentation](https://alembic.sqlalchemy.org/)
-- [FastAPI Deployment](https://fastapi.tiangolo.com/deployment/)
-- [Docker Compose Documentation](https://docs.docker.com/compose/)
+### Deployment Strategy
+- **Frontend**: Deploy to Vercel or as a Docker container.
+- **Backend/Worker**: Deploy to AWS ECS, Kubernetes, or DigitalOcean App Platform.

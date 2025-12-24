@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../../../../contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import axios from 'axios'
-import { Check, ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Loader2, ShieldCheck, Sparkles } from 'lucide-react'
+import DocumentCard from '../../../../components/ui/DocumentCard'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'
 
@@ -25,55 +26,29 @@ export default function Step2DocumentsPage() {
     const [claimId, setClaimId] = useState<string | null>(null)
     const [documents, setDocuments] = useState<UploadedDocument[]>([])
     const [loading, setLoading] = useState(true)
-    const [initialized, setInitialized] = useState(false)
+    const [adjudicating, setAdjudicating] = useState(false)
 
-    // Get claim ID from URL on mount
+    // Initial Load & Auth Check
     useEffect(() => {
+        if (!isLoading && !user) router.push('/login')
+
         if (typeof window !== 'undefined') {
             const urlClaimId = new URLSearchParams(window.location.search).get('claim_id')
-            console.log('📋 Step 2: Checking URL for claim_id:', urlClaimId)
             if (urlClaimId) {
                 setClaimId(urlClaimId)
-                console.log('✅ Step 2: Claim ID set from URL:', urlClaimId)
+            } else {
+                // small delay to prevent flash if query param is slow to read
+                setTimeout(() => router.push('/upload/step1'), 100)
             }
-            setInitialized(true)
-        }
-    }, [])
-
-    // Redirect if not authenticated
-    useEffect(() => {
-        if (!isLoading && !user) {
-            router.push('/login')
         }
     }, [user, isLoading, router])
 
-    // Redirect if no claim ID (only after initialization)
+    // Load Data
     useEffect(() => {
-        if (initialized && !claimId) {
-            console.log('⚠️ Step 2: No claim ID found, redirecting to step 1')
-            router.push('/upload/step1')
-        }
-    }, [initialized, claimId, router])
-
-    // Fetch documents
-    useEffect(() => {
-        if (claimId && token) {
-            fetchDocuments()
-        }
+        if (claimId && token) fetchDocuments()
     }, [claimId, token])
 
-    // Auto-redirect to step 3 after 10 seconds
-    useEffect(() => {
-        if (documents.length > 0 && claimId) {
-            const timer = setTimeout(() => {
-                router.push(`/upload/step3?claim_id=${claimId}`)
-            }, 10000) // 10 seconds
-
-            return () => clearTimeout(timer)
-        }
-    }, [documents, claimId, router])
-
-    // Real-time updates via SSE
+    // SSE Stream for Real-time Updates
     useEffect(() => {
         if (!claimId || !token) return
 
@@ -85,204 +60,135 @@ export default function Step2DocumentsPage() {
 
                 if (data.type === 'document_update') {
                     setDocuments(prev => {
-                        const existingIndex = prev.findIndex(doc => doc.file_id === data.file_id)
-
-                        if (existingIndex >= 0) {
-                            return prev.map(doc =>
-                                doc.file_id === data.file_id
-                                    ? { ...doc, status: data.status, extracted_data: data.extracted_data }
-                                    : doc
-                            )
+                        const exists = prev.find(d => d.file_id === data.file_id)
+                        if (exists) {
+                            return prev.map(d => d.file_id === data.file_id ? { ...d, ...data } : d)
                         } else {
                             return [...prev, {
                                 file_id: data.file_id,
-                                filename: data.filename || "Unknown",
-                                document_type: data.document_type || "auto",
+                                filename: data.filename || "Unknown Doc",
+                                document_type: data.document_type || "document",
                                 status: data.status,
                                 extracted_data: data.extracted_data
                             }]
                         }
                     })
                 }
+
+                if (data.type === 'claim_decision') {
+                    router.push(`/upload/step3?claim_id=${claimId}`)
+                }
             } catch (e) {
-                console.error("Error parsing SSE data:", e)
+                console.error("SSE Parse Error", e)
             }
         }
 
-        return () => {
-            eventSource.close()
+        return () => eventSource.close()
+    }, [claimId, token, router])
+
+    // Monitor completion for fallback and UI state
+    useEffect(() => {
+        if (documents.length > 0 && documents.every(d => d.status === 'processed' || d.status === 'failed')) {
+            setAdjudicating(true)
+            // Safety fallback
+            const timer = setTimeout(() => router.push(`/upload/step3?claim_id=${claimId}`), 8000)
+            return () => clearTimeout(timer)
         }
-    }, [claimId, token])
+    }, [documents, claimId])
 
     const fetchDocuments = async () => {
         try {
-            const response = await axios.get(
-                `${API_BASE_URL}/api/documents/status?claim_id=${claimId}`,
-                { headers: { Authorization: `Bearer ${token}` } }
-            )
-            setDocuments(response.data)
+            const res = await axios.get(`${API_BASE_URL}/api/documents/status?claim_id=${claimId}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            })
+            setDocuments(res.data)
         } catch (err) {
-            console.error('Failed to load documents:', err)
+            console.error("Fetch error", err)
         } finally {
             setLoading(false)
         }
     }
 
-    const getStatusDisplay = (status: string) => {
-        switch (status) {
-            case 'uploaded':
-                return { text: 'Queued', icon: '⏳', color: 'text-gray-500' }
-            case 'processing':
-                return { text: 'Extracting Information...', icon: '⚙️', color: 'text-blue-600 animate-pulse' }
-            case 'processed':
-                return { text: 'Done', icon: '✅', color: 'text-green-600' }
-            case 'failed':
-                return { text: 'Failed', icon: '❌', color: 'text-red-600' }
-            default:
-                return { text: 'Waiting...', icon: '🕒', color: 'text-gray-400' }
-        }
-    }
+    if (isLoading || loading) return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-900">
+            <Loader2 className="w-10 h-10 text-brand-500 animate-spin" />
+        </div>
+    )
 
-    if (isLoading || loading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center">
-                <div className="text-xl">Loading...</div>
-            </div>
-        )
-    }
-
-    if (!user) {
-        return null
-    }
+    if (!user) return null
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-8">
-            <div className="max-w-4xl mx-auto">
-                {/* Progress Indicator */}
-                <div className="mb-8">
-                    <div className="flex items-center justify-center gap-4">
-                        <div className="flex items-center">
-                            <div className="w-10 h-10 rounded-full bg-green-500 text-white flex items-center justify-center font-bold">
-                                ✓
-                            </div>
-                            <span className="ml-2 text-gray-600">Upload Documents</span>
-                        </div>
-                        <div className="w-16 h-1 bg-blue-600"></div>
-                        <div className="flex items-center">
-                            <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold">
-                                2
-                            </div>
-                            <span className="ml-2 font-semibold text-blue-600">View Documents</span>
-                        </div>
-                        <div className="w-16 h-1 bg-gray-300"></div>
-                        <div className="flex items-center">
-                            <div className="w-10 h-10 rounded-full bg-gray-300 text-gray-600 flex items-center justify-center font-bold">
-                                3
-                            </div>
-                            <span className="ml-2 text-gray-500">Claim Status</span>
-                        </div>
+        <div className="min-h-screen px-4 py-8 relative">
+            {/* Background elements handled by global CSS, just container here */}
+            <div className="max-w-6xl mx-auto">
+
+                {/* Header Section */}
+                <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-4 animate-fade-in">
+                    <button
+                        onClick={() => router.push(`/upload/step1?claim_id=${claimId}`)}
+                        className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors self-start md:self-auto"
+                    >
+                        <ArrowLeft className="w-4 h-4" />
+                        <span>Back</span>
+                    </button>
+
+                    <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-brand-100 text-sm">
+                        <ShieldCheck className="w-4 h-4" />
+                        <span className="font-mono opacity-80">CLAIM ID: {claimId}</span>
                     </div>
                 </div>
 
-                {/* Back Button */}
-                <button
-                    onClick={() => router.push(`/upload/step1?claim_id=${claimId}`)}
-                    className="mb-6 flex items-center gap-2 text-blue-600 hover:text-blue-700 font-semibold"
-                >
-                    <ArrowLeft className="w-5 h-5" />
-                    Back to Upload
-                </button>
-
-                {/* Header */}
-                <div className="mb-8">
-                    <h1 className="text-4xl font-bold text-gray-900 mb-2">Uploaded Documents</h1>
-                    <p className="text-gray-600">
-                        Review your uploaded documents and their processing status.
+                {/* Main Status Display */}
+                <div className="text-center mb-12 animate-slide-up">
+                    <h1 className="text-3xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white via-indigo-100 to-indigo-200 mb-4">
+                        {adjudicating ? 'Finalizing Analysis...' : 'Processing Documents'}
+                    </h1>
+                    <p className="text-indigo-200/70 text-lg max-w-2xl mx-auto">
+                        {adjudicating
+                            ? "Our AI is cross-referencing extracted data with your policy terms to adjudicate this claim."
+                            : "We're extracting key information from your uploaded files. This typically takes 10-20 seconds."
+                        }
                     </p>
-                    {claimId && (
-                        <p className="text-sm text-gray-500 mt-2">
-                            Claim ID: <span className="font-mono font-semibold">{claimId}</span>
-                        </p>
+                </div>
+
+                {/* Adjudication Overlay/Spinner */}
+                {adjudicating && (
+                    <div className="mb-12 flex justify-center animate-pulse-slow">
+                        <div className="flex items-center gap-3 px-6 py-3 bg-emerald-500/10 border border-emerald-500/20 rounded-full backdrop-blur-md text-emerald-300">
+                            <Sparkles className="w-5 h-5 animate-pulse" />
+                            <span className="font-semibold"> AI Adjudication in Progress</span>
+                        </div>
+                    </div>
+                )}
+
+                {/* Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {documents.map((doc, idx) => (
+                        <div key={doc.file_id} className="animate-slide-up" style={{ animationDelay: `${idx * 100}ms` }}>
+                            <DocumentCard
+                                filename={doc.filename}
+                                type={doc.document_type}
+                                status={doc.status}
+                                extractedData={doc.extracted_data}
+                                confidence={doc.confidence_score}
+                            />
+                        </div>
+                    ))}
+
+                    {/* Add Document Placeholder */}
+                    {!adjudicating && (
+                        <div
+                            onClick={() => router.push(`/upload/step1?claim_id=${claimId}`)}
+                            className="group h-full min-h-[240px] border-2 border-dashed border-white/10 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-brand-500/50 hover:bg-brand-500/5 transition-all duration-300"
+                        >
+                            <div className="p-4 rounded-full bg-white/5 group-hover:bg-brand-500/20 transition-colors mb-4">
+                                <span className="text-2xl">+</span>
+                            </div>
+                            <p className="text-slate-400 group-hover:text-brand-300 font-medium">Upload More</p>
+                        </div>
                     )}
                 </div>
 
-                {/* Documents List */}
-                {documents.length > 0 ? (
-                    <div className="bg-white rounded-2xl shadow-xl p-8">
-                        <h2 className="text-2xl font-bold mb-6">Your Documents</h2>
-                        <div className="space-y-4">
-                            {documents.map((doc) => {
-                                const statusInfo = getStatusDisplay(doc.status)
-
-                                return (
-                                    <div
-                                        key={doc.file_id}
-                                        className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow"
-                                    >
-                                        <div className="flex justify-between items-start mb-4">
-                                            <div className="flex-1">
-                                                <div className="flex items-center gap-3 mb-2">
-                                                    <h3 className="font-semibold text-lg text-gray-900">
-                                                        {doc.filename}
-                                                    </h3>
-
-                                                    <span className={`text-sm flex items-center gap-2 ${statusInfo.color}`}>
-                                                        <span>{statusInfo.icon}</span>
-                                                        <span className="font-medium">{statusInfo.text}</span>
-                                                    </span>
-                                                </div>
-
-                                                <p className="text-sm text-gray-500">
-                                                    Type: <span className="font-medium">{doc.document_type}</span>
-                                                </p>
-                                            </div>
-
-                                            {doc.status === 'processed' && (
-                                                <div className="bg-green-100 p-2 rounded-full">
-                                                    <Check className="w-5 h-5 text-green-600" />
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {doc.status === 'processed' && doc.extracted_data && (
-                                            <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                                                <h4 className="font-semibold text-sm text-gray-700 mb-2">
-                                                    Extracted Data:
-                                                </h4>
-                                                <pre className="text-xs text-gray-600 overflow-auto max-h-64">
-                                                    {JSON.stringify(doc.extracted_data, null, 2)}
-                                                </pre>
-                                                {doc.confidence_score && (
-                                                    <p className="mt-2 text-sm text-gray-600">
-                                                        Confidence: <span className="font-semibold">{(doc.confidence_score * 100).toFixed(1)}%</span>
-                                                    </p>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-                                )
-                            })}
-                        </div>
-
-                        <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                            <p className="text-blue-800 text-center">
-                                ⏳ Processing your documents... You'll be redirected to view the claim status shortly.
-                            </p>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="bg-white rounded-2xl shadow-xl p-12 text-center">
-                        <div className="text-6xl mb-4">📄</div>
-                        <h3 className="text-xl font-semibold text-gray-700 mb-2">No documents uploaded yet</h3>
-                        <p className="text-gray-500 mb-6">Upload your medical documents to get started.</p>
-                        <button
-                            onClick={() => router.push(`/upload/step1?claim_id=${claimId}`)}
-                            className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
-                        >
-                            Upload Documents
-                        </button>
-                    </div>
-                )}
             </div>
         </div>
     )
