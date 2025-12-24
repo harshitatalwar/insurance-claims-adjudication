@@ -185,8 +185,11 @@ ALLOWED_ORIGINS=http://localhost:3000,https://your-domain.com
 
 ### **2. Start All Services**
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
+Location: Root folder (opd-claims-adjudication) Terminal: Terminal 1
+Run this to build and start the Backend, Frontend, Database, Redis, and MinIO:
+Wait about 1-2 minutes for everything to start.
 
 This starts:
 - PostgreSQL (port 5432)
@@ -199,13 +202,33 @@ This starts:
 
 ### **3. Run Database Migrations**
 ```bash
-docker compose exec backend poetry run alembic upgrade head
+docker compose exec backend alembic upgrade head
 ```
+Location: Root folder (opd-claims-adjudication) Terminal: Terminal 1 (Same one)
+This creates the tables in your PostgreSQL database
 
-### **4. Seed Policy Terms (Optional)**
+### **4. Seed Policy Terms**
 ```bash
-docker compose exec backend poetry run python seed_policy_terms.py
+docker compose exec backend python seed_policy_terms.py
 ```
+Location: Root folder (opd-claims-adjudication) 
+Terminal: Terminal 1 (Same one)
+This adds the sample policy terms so the AI knows what to check against
+
+### **5. Verify & Access**
+Everything is now running.
+
+Frontend (App): Open http://localhost:3000
+Login/Register to start uploading.
+Backend (Docs): http://localhost:8000/docs
+MinIO (Files): http://localhost:9001
+
+### **6. Optional: Monitor Logs**
+If you want to see what the AI is doing in real-time (like OCR or Adjudicating), run this in a new terminal
+```bash
+docker compose logs -f celery_worker
+```
+Terminal: Terminal 2
 
 ---
 
