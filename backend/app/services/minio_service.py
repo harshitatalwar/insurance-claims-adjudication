@@ -7,6 +7,7 @@ from minio import Minio
 from minio.error import S3Error
 from datetime import timedelta
 import logging
+import os
 
 from app.config import settings
 
@@ -59,12 +60,20 @@ class MinIOStorageService(StorageInterface):
             )
             # Public client for generating presigned URLs (browser access)
             # using 'localhost' ensures the signature matches the Host header sent by the browser.
+            public_url = os.getenv("MINIO_PUBLIC_URL", f"localhost:{settings.MINIO_PORT}")
+            
+            # The MinIO client expects "host:port", so we strip "http://"
+            public_endpoint = public_url.replace("http://", "").replace("https://", "")
+
+            logger.info(f"[MINIO] Public Endpoint for Signatures: {public_endpoint}")
+
             self.public_client = Minio(
-                endpoint=f"localhost:{settings.MINIO_PORT}",
+                endpoint=public_endpoint,
                 access_key=settings.MINIO_ACCESS_KEY,
                 secret_key=settings.MINIO_SECRET_KEY,
-                secure=settings.MINIO_SECURE,
-                region="us-east-1"  # Explicit region prevents auto-discovery network calls (fixing 500 error)
+                # Force secure=False because raw IPs usually don't have SSL certificates
+                secure=False, 
+                region="us-east-1"
             )
             self.bucket_name = settings.MINIO_BUCKET_NAME
             logger.info(f"[MINIO] Client created successfully")
