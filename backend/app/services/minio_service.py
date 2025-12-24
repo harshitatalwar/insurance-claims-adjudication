@@ -48,36 +48,42 @@ class MinIOStorageService(StorageInterface):
         logger.info(f"[MINIO] Initializing MinIO client")
         logger.info(f"[MINIO] Endpoint: {settings.MINIO_HOST}:{settings.MINIO_PORT}")
         logger.info(f"[MINIO] Bucket: {settings.MINIO_BUCKET_NAME}")
-        logger.info(f"[MINIO] Secure: {settings.MINIO_SECURE}")
         
         try:
+            # 1. Internal Client (Backend <-> MinIO)
+            # This handles the internal docker connection (always http internally)
             self.client = Minio(
                 endpoint=f"{settings.MINIO_HOST}:{settings.MINIO_PORT}",
                 access_key=settings.MINIO_ACCESS_KEY,
                 secret_key=settings.MINIO_SECRET_KEY,
                 secure=settings.MINIO_SECURE,
-                region="us-east-1"  # Explicit region prevents auto-discovery network calls
+                region="us-east-1"
             )
-            # Public client for generating presigned URLs (browser access)
-            # using 'localhost' ensures the signature matches the Host header sent by the browser.
+
+            # 2. Public Client (Browser <-> MinIO)
+            # Get the URL from env. Default to localhost if missing.
             public_url = os.getenv("MINIO_PUBLIC_URL", f"localhost:{settings.MINIO_PORT}")
             
-            # The MinIO client expects "host:port", so we strip "http://"
+            # Auto-detect SSL: If the URL starts with https, use secure=True
+            use_ssl = public_url.startswith("https://")
+            
+            # Clean the endpoint string (MinIO hates 'http://' prefixes)
             public_endpoint = public_url.replace("http://", "").replace("https://", "")
 
-            logger.info(f"[MINIO] Public Endpoint for Signatures: {public_endpoint}")
+            logger.info(f"[MINIO] Public Endpoint: {public_endpoint} | SSL: {use_ssl}")
 
             self.public_client = Minio(
                 endpoint=public_endpoint,
                 access_key=settings.MINIO_ACCESS_KEY,
                 secret_key=settings.MINIO_SECRET_KEY,
-                # Force secure=False because raw IPs usually don't have SSL certificates
-                secure=False, 
+                secure=use_ssl,  # <--- DYNAMICALLY SET TO TRUE/FALSE
                 region="us-east-1"
             )
+
             self.bucket_name = settings.MINIO_BUCKET_NAME
             logger.info(f"[MINIO] Client created successfully")
             self._ensure_bucket_exists()
+            
         except Exception as e:
             logger.error(f"[MINIO] Failed to initialize: {str(e)}")
             raise
